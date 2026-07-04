@@ -1,0 +1,146 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #0f1115;
+  color: #e6e6e6;
+}
+
+.app { min-height: 100vh; display: flex; flex-direction: column; }
+
+/* ---- 顶栏 ---- */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 24px;
+  background: #161a22;
+  border-bottom: 1px solid #232936;
+}
+.topbar h1 { font-size: 18px; font-weight: 600; }
+.topbar .subtitle { color: #888; font-size: 13px; flex: 1; }
+.btn-danger {
+  background: #3a1d1d; color: #ff8080; border: 1px solid #5a2828;
+  padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px;
+}
+.btn-danger:hover { background: #4a2424; }
+
+/* ---- 布局 ---- */
+.layout { flex: 1; display: flex; gap: 1px; background: #232936; }
+.sidebar {
+  width: 320px; background: #161a22; padding: 20px;
+  display: flex; flex-direction: column; gap: 18px;
+  overflow-y: auto;
+}
+.queue {
+  flex: 1; background: #0f1115; padding: 20px;
+  display: flex; flex-direction: column; gap: 8px;
+  overflow-y: auto;
+}
+
+/* ---- 上传区 ---- */
+.dropzone {
+  border: 2px dashed #2f3850; border-radius: 10px;
+  padding: 36px 16px; text-align: center; cursor: pointer;
+  transition: all 0.15s;
+}
+.dropzone:hover { border-color: #4a8fff; background: #1a2030; }
+.dropzone .big { font-size: 36px; color: #4a8fff; margin-bottom: 8px; }
+.dropzone-text > div { font-size: 14px; }
+.dropzone .hint { color: #666; font-size: 12px; margin-top: 4px; }
+
+/* ---- 选项 ---- */
+.options { display: flex; flex-direction: column; gap: 12px; }
+.options label {
+  display: flex; flex-direction: column; gap: 6px;
+  font-size: 13px; color: #aaa;
+}
+.options select, .options input {
+  background: #0f1115; border: 1px solid #2a3142; color: #e6e6e6;
+  padding: 8px 10px; border-radius: 6px; font-size: 14px;
+}
+
+/* ---- 按钮 ---- */
+.actions { display: flex; gap: 8px; }
+.btn-primary {
+  flex: 1; background: #2563eb; color: white; border: none;
+  padding: 10px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;
+}
+.btn-primary:hover:not(:disabled) { background: #1d4ed8; }
+.btn-primary:disabled { background: #1e3a5f; color: #6a8aaa; cursor: not-allowed; }
+.btn-ghost {
+  background: transparent; color: #aaa; border: 1px solid #2a3142;
+  padding: 10px 14px; border-radius: 6px; cursor: pointer; font-size: 14px;
+}
+.btn-ghost:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ---- 进度汇总 ---- */
+.progress-summary {
+  padding: 12px; background: #0f1115; border-radius: 6px;
+  font-size: 13px; line-height: 1.8;
+}
+.progress-summary .err { color: #ff8080; }
+.progress-summary .ok { color: #4ade80; }
+
+/* ---- 队列空 ---- */
+.empty {
+  color: #555; font-size: 14px; text-align: center;
+  padding: 60px 20px;
+}
+
+/* ---- 队列行 ---- */
+.row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px; background: #161a22; border-radius: 8px;
+  border-left: 3px solid #2a3142;
+}
+.row-running { border-left-color: #facc15; }
+.row-done { border-left-color: #4ade80; }
+.row-error { border-left-color: #f87171; }
+
+.thumb {
+  width: 56px; height: 56px; object-fit: cover; border-radius: 4px;
+  cursor: pointer; background: #0f1115;
+}
+.row-info { flex: 1; min-width: 0; }
+.row-name {
+  font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.row-status { font-size: 12px; margin-top: 4px; color: #888; }
+.status-running { color: #facc15; }
+.status-done { color: #4ade80; }
+.status-error { color: #f87171; }
+
+.row-remove {
+  background: none; border: none; color: #555; cursor: pointer;
+  font-size: 14px; padding: 4px 8px;
+}
+.row-remove:hover { color: #f87171; }
+
+/* ---- 预览弹窗 ---- */
+.modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100; padding: 20px;
+}
+.modal-body {
+  max-width: 95vw; max-height: 95vh;
+  background: #161a22; border-radius: 8px; padding: 12px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.modal-body img {
+  max-width: 90vw; max-height: 80vh; object-fit: contain;
+  border-radius: 4px;
+}
+.modal-tabs {
+  display: flex; gap: 8px; align-items: center;
+}
+.modal-tabs button {
+  background: #0f1115; color: #aaa; border: 1px solid #2a3142;
+  padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px;
+}
+.modal-tabs button.active { background: #2563eb; color: white; border-color: #2563eb; }
+.modal-tabs .close { margin-left: auto; }
+.modal-tabs .download-link {
+  color: #4a8fff; font-size: 13px; text-decoration: none; padding: 6px 10px;
+}

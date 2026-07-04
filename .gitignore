@@ -1,0 +1,36 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# ===== 虚拟环境 =====
+venv/
+.venv/
+env/
+
+# ===== 敏感配置（绝不推送）=====
+.env
+.env.local
+*.local
+
+# ===== 测试素材 / 输出（用户私有）=====
+manga/
+outputs/
+test_input.png
+test_output.png
+_real_result.png
+_s*.json
+
+# ===== 前端 =====
+front/node_modules/
+front/dist/
+front/.vite/
+
+# ===== IDE / 系统 =====
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

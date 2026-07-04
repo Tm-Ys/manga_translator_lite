@@ -1,0 +1,50 @@
+# ===== Manga Translator Lite - 精简依赖 =====
+# torch / torchvision 用 +cu128 wheel 单独装（见 run setup）
+torch
+torchvision
+
+# Web 后端
+fastapi
+uvicorn[standard]
+pydantic>=2.5
+python-multipart
+aiohttp
+aiofiles
+nest-asyncio
+
+# 翻译（DeepSeek 走 OpenAI SDK）
+openai>=1.63
+
+# 视觉/数学（detection/ocr/inpainting/rendering 依赖）
+numpy==1.26.4
+opencv-python
+pillow
+scikit-image
+scipy
+imageio
+tifffile
+shapely
+pyclipper
+freetype-py
+
+# mask refinement
+pydensecrf@https://github.com/lucasb-eyer/pydensecrf/archive/refs/heads/master.zip
+
+# 模型下载
+huggingface_hub
+
+# rendering 多语言
+pyhyphen
+arabic-reshaper
+python-bidi
+langcodes[data]
+py3langid==0.2.2
+editdistance
+langdetect
+
+# 配置/工具
+python-dotenv
+tqdm
+rich
+regex
+networkx
