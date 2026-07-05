@@ -207,20 +207,49 @@ def add_color(bw_char_map, color, stroke_char_map, stroke_color):
     #alpha_char_map[alpha_char_map > 0] = 255
     return bg#, alpha_char_map
 
-# Fallback fonts (tried in order when the primary font lacks a glyph).
-# Only paths that exist on disk are kept — this lets the project run even when
-# optional commercial fonts (Arial Unicode / msyh / msgothic) are absent.
-# NotoSansMonoCJK-VF.ttf.ttc ships with the repo and serves as the universal
-# last-resort (broad CJK coverage, open license).
-FALLBACK_FONTS = [
-    p for p in [
-        os.path.join(BASE_PATH, 'fonts/Arial-Unicode-Regular.ttf'),
+def _resolve_fallback_fonts() -> List[str]:
+    """
+    动态生成 fallback 字体列表（按优先级，仅保留实际存在的文件）。
+
+    优先级：
+      1. 项目 fonts/ 下的 msyh.ttc（微软雅黑，run.bat 自动从 Windows 复制；
+         中文显示效果最佳，全中国用户系统都有，但不入库避免版权风险）
+      2. Windows 系统目录的 msyh.ttc（绝对路径，复制遗漏时也能找到）
+      3. 项目 fonts/ 下的 msgothic.ttc（日文备选，同上）
+      4. Windows 系统目录的 msgothic.ttc / YuGothR.ttc（日文备选）
+      5. 项目自带的 NotoSansMonoCJK-VF.ttf.ttc（开源，CJK 全覆盖，
+         仓库已含，Mac/Linux 或无中文字体的环境下的最终兜底）
+
+    不再使用 Arial-Unicode-Regular.ttf（付费字体，且 Windows 不自带）。
+    """
+    candidates = [
+        # 项目目录（run.bat 复制的字体优先）
         os.path.join(BASE_PATH, 'fonts/msyh.ttc'),
         os.path.join(BASE_PATH, 'fonts/msgothic.ttc'),
-        os.path.join(BASE_PATH, 'fonts/NotoSansMonoCJK-VF.ttf.ttc'),
     ]
-    if os.path.isfile(p)
-]
+    # Windows 系统字体目录（如果存在）
+    win_fonts = os.environ.get('WINDIR', r'C:\Windows') + r'\Fonts'
+    if os.path.isdir(win_fonts):
+        candidates += [
+            os.path.join(win_fonts, 'msyh.ttc'),
+            os.path.join(win_fonts, 'msgothic.ttc'),
+            os.path.join(win_fonts, 'YuGothR.ttc'),  # Win10+ 日文
+        ]
+    # 最终兜底：仓库自带的开源字体
+    candidates.append(os.path.join(BASE_PATH, 'fonts/NotoSansMonoCJK-VF.ttf.ttc'))
+
+    seen = set()
+    result = []
+    for p in candidates:
+        np_ = os.path.normpath(p)
+        if np_ not in seen and os.path.isfile(np_):
+            seen.add(np_)
+            result.append(np_)
+    return result
+
+
+# Fallback fonts (tried in order when the primary font lacks a glyph).
+FALLBACK_FONTS = _resolve_fallback_fonts()
 FONT_SELECTION: List[freetype.Face] = []
 font_cache = {}
 def get_cached_font(path: str) -> freetype.Face:
