@@ -92,6 +92,39 @@ async def list_outputs():
     return {'outputs_dir': root, 'batches': batches}
 
 
+# ---------- 字体管理 ----------
+
+@app.get("/api/fonts")
+async def list_fonts_endpoint():
+    """列出所有可用字体（内置 + 系统 + 用户上传）。"""
+    from app.pipeline import list_fonts
+    return {'fonts': list_fonts()}
+
+
+@app.post("/api/fonts/upload")
+async def upload_font(file: UploadFile = File(...)):
+    """上传用户字体到 fonts/user/。返回新字体项。"""
+    from app.pipeline import FONT_EXTENSIONS, USER_FONTS_DIR
+    fn = (file.filename or '').strip().lower()
+    if not fn.endswith(FONT_EXTENSIONS):
+        return {'ok': False, 'error': f'只支持 {FONT_EXTENSIONS} 字体文件'}
+    # 安全校验：仅文件名，去掉路径
+    safe = os.path.basename(file.filename)
+    dest = os.path.join(USER_FONTS_DIR, safe)
+    raw = await file.read()
+    with open(dest, 'wb') as fp:
+        fp.write(raw)
+    return {
+        'ok': True,
+        'font': {
+            'id': 'user:' + safe,
+            'name': safe + '（用户上传）',
+            'source': 'user',
+            'path': dest,
+        },
+    }
+
+
 # ---------- 请求/响应模型 ----------
 
 class BatchStatusResponse(BaseModel):

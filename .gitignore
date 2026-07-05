@@ -33,10 +33,13 @@ models/
 # ===== 字体版权风险（部分字体为商用授权，不入库）=====
 # msyh.ttc / msgothic.ttc 是微软字体，推到公开仓库有版权风险
 # Arial-Unicode-Regular.ttf 同理
-# 字体首次运行时由用户自行放入 fonts/，或从上游 fork 复制
+# 这些字体由 run.bat 从 Windows 系统复制，或用户手动放入
 fonts/msyh.ttc
 fonts/msgothic.ttc
 fonts/Arial-Unicode-Regular.ttf
+
+# 用户上传的字体（可能是版权字体，不入库）
+fonts/user/
 
 # ===== 前端 =====
 front/node_modules/

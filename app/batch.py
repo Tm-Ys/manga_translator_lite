@@ -126,6 +126,9 @@ async def _worker():
 
             # 从 batch 上读前端传来的配置（main.py 挂的 cfg 属性）
             cfg = getattr(batch, 'cfg', {}) or {}
+            # 把 font_id 解析成实际字体路径
+            from app.pipeline import resolve_font_path
+            font_path = resolve_font_path(cfg.get('font_id', 'auto'))
             item.progress = 'translating'
             result = await translate_image(
                 img,
@@ -133,6 +136,7 @@ async def _worker():
                 direction=cfg.get('direction', 'auto'),
                 font_size_offset=int(cfg.get('font_size_offset', 0)),
                 font_size_minimum=int(cfg.get('font_size_minimum', -1)),
+                font_path=font_path,
             )
 
             item.result_b64 = _pil_to_b64_full(result)

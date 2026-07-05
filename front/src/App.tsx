@@ -22,6 +22,11 @@ interface BatchStatus {
   }
   items: Item[]
 }
+interface FontItem {
+  id: string
+  name: string
+  source: 'builtin' | 'system' | 'user'
+}
 
 // ---------- 配置选项 ----------
 const TARGET_LANGS = [
@@ -43,10 +48,49 @@ export default function App() {
   const [targetLang, setTargetLang] = useState('CHS')
   const [direction, setDirection] = useState('auto')
   const [fontSizeOffset, setFontSizeOffset] = useState(0)
+  const [fontId, setFontId] = useState('auto')
+  const [fonts, setFonts] = useState<FontItem[]>([])
   const [busy, setBusy] = useState(false)
   const [previewItem, setPreviewItem] = useState<Item | null>(null)
   const [showOriginal, setShowOriginal] = useState(false)
   const pollRef = useRef<number | null>(null)
+
+  // ---- 加载字体列表 ----
+  const loadFonts = useCallback(async () => {
+    try {
+      const res = await fetch('/api/fonts')
+      const data = await res.json()
+      setFonts(data.fonts || [])
+    } catch {
+      /* 忽略 */
+    }
+  }, [])
+
+  useEffect(() => {
+    loadFonts()
+  }, [loadFonts])
+
+  // ---- 上传字体 ----
+  const onUploadFont = useCallback(
+    async (list: FileList | null) => {
+      if (!list || !list.length) return
+      const fd = new FormData()
+      fd.append('file', list[0])
+      try {
+        const res = await fetch('/api/fonts/upload', { method: 'POST', body: fd })
+        const data = await res.json()
+        if (data.ok) {
+          await loadFonts()
+          setFontId(data.font.id)
+        } else {
+          alert('上传失败: ' + (data.error || '未知错误'))
+        }
+      } catch (e) {
+        alert('上传失败: ' + (e as Error).message)
+      }
+    },
+    [loadFonts],
+  )
 
   // ---- 文件选择 ----
   const onPick = useCallback((list: FileList | null) => {
@@ -75,7 +119,12 @@ export default function App() {
     files.forEach((f) => fd.append('images', f))
     fd.append(
       'config',
-      JSON.stringify({ target_lang: targetLang, direction, font_size_offset: fontSizeOffset }),
+      JSON.stringify({
+        target_lang: targetLang,
+        direction,
+        font_size_offset: fontSizeOffset,
+        font_id: fontId,
+      }),
     )
     try {
       const res = await fetch('/api/translate/batch', { method: 'POST', body: fd })
@@ -212,6 +261,26 @@ export default function App() {
                 max={10}
                 value={fontSizeOffset}
                 onChange={(e) => setFontSizeOffset(Number(e.target.value))}
+              />
+            </label>
+            <label>
+              嵌字字体
+              <select value={fontId} onChange={(e) => setFontId(e.target.value)}>
+                {fonts.length === 0 && <option value="auto">自动（加载中…）</option>}
+                {fonts.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              上传自己的字体（.ttf / .ttc / .otf）
+              <input
+                type="file"
+                accept=".ttf,.ttc,.otf"
+                onChange={(e) => onUploadFont(e.target.files)}
+                style={{ fontSize: 12, padding: '4px' }}
               />
             </label>
           </div>
