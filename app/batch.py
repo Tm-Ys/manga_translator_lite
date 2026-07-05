@@ -314,3 +314,52 @@ def cancel_batch(batch_id: str) -> bool:
         return False
     b.cancelled = True
     return True
+
+
+def enqueue_folder_upload(
+    files: list[tuple[str, str, bytes]],
+    input_dirname: str,
+    cfg: dict,
+) -> tuple[str, str, int]:
+    """
+    文件夹上传模式：浏览器通过 showDirectoryPicker 选目录后，把文件们
+    （含相对路径）上传过来。后端按相对路径镜像输出。
+
+    files: [(filename, rel_path, raw_bytes), ...]
+        rel_path 形如 "第2话/001.jpg"（含子目录），用 / 分隔
+    input_dirname: 用户选择的目录名（用于生成 out_root）
+    返回 (batch_id, out_root, total)。
+    """
+    ts = time.strftime('%Y_%m_%d_%H_%M_%S')
+    safe_dirname = re.sub(r'[\\/:*?"<>|\x00-\x1f]', '_', input_dirname or 'upload')
+    out_root = f'{safe_dirname}_{ts}'
+
+    cfg = dict(cfg)
+    cfg['mode'] = 'folder'  # 复用 worker 的 folder 分支
+    cfg['out_root'] = out_root
+
+    batch_id = uuid.uuid4().hex[:12]
+    batch = Batch(id=batch_id)
+
+    for filename, rel_path, raw in files:
+        # 统一 rel_path 用 os.sep（worker 里用 os.path.join 拼）
+        rel = rel_path.replace('/', os.sep)
+        b64 = 'data:image/png;base64,' + base64.b64encode(raw).decode()
+        item = BatchItem(
+            id=uuid.uuid4().hex[:8],
+            filename=filename,
+            rel_path=rel,
+            source_b64=b64,
+        )
+        try:
+            img = Image.open(io.BytesIO(raw))
+            item.source_thumb_b64 = _img_to_b64(img)
+        except Exception:
+            pass
+        batch.items.append(item)
+
+    BATCHES[batch_id] = batch
+    setattr(batch, 'cfg', cfg)
+    for item in batch.items:
+        _queue.put_nowait((batch_id, item.id))
+    return batch_id, out_root, len(batch.items)

@@ -141,7 +141,7 @@ export default function App() {
     }
   }, [files, targetLang, direction, fontSizeOffset])
 
-  // ---- 文件夹模式提交 ----
+  // ---- 文件夹模式提交（手敲路径，后端直读盘）----
   const submitFolder = useCallback(async () => {
     const p = folderPath.trim()
     if (!p) return
@@ -169,6 +169,76 @@ export default function App() {
       setBusy(false)
     }
   }, [folderPath, targetLang, direction, fontSizeOffset, fontId])
+
+  // ---- 文件夹模式：showDirectoryPicker 弹窗选择 ----
+  const pickDirectory = useCallback(async () => {
+    // 仅 Chrome/Edge 支持
+    const w = window as any
+    if (!w.showDirectoryPicker) {
+      alert('当前浏览器不支持文件夹选择器（需要 Chrome 或 Edge）。\n请用手动输入路径，或换 Chrome/Edge 打开。')
+      return
+    }
+    try {
+      const dirHandle = await w.showDirectoryPicker()
+      setBusy(true)
+      setStatus(null)
+      setFiles([])
+      // 递归读取所有图片
+      const IMAGE_EXT = /\.(png|jpe?g|webp|bmp)$/i
+      const collected: { file: File; rel: string }[] = []
+      const walk = async (handle: any, prefix: string) => {
+        for await (const entry of handle.values()) {
+          if (entry.kind === 'file') {
+            if (IMAGE_EXT.test(entry.name)) {
+              const f = await entry.getFile()
+              collected.push({ file: f, rel: prefix + entry.name })
+            }
+          } else if (entry.kind === 'directory') {
+            await walk(entry, prefix + entry.name + '/')
+          }
+        }
+      }
+      await walk(dirHandle, '')
+      if (collected.length === 0) {
+        alert('该文件夹里没找到图片（支持 png/jpg/jpeg/webp/bmp）')
+        setBusy(false)
+        return
+      }
+      if (collected.length > 500) {
+        if (!confirm(`共 ${collected.length} 张图片，通过浏览器上传可能较慢（几百 MB）。继续？`)) {
+          setBusy(false)
+          return
+        }
+      }
+      // 上传到 folder-upload 端点
+      const fd = new FormData()
+      const rels: string[] = []
+      collected.forEach((c) => {
+        fd.append('files', c.file, c.file.name)
+        rels.push(c.rel)
+      })
+      fd.append('rel_paths', JSON.stringify(rels))
+      fd.append('dirname', dirHandle.name)
+      fd.append(
+        'config',
+        JSON.stringify({ target_lang: targetLang, direction, font_size_offset: fontSizeOffset, font_id: fontId }),
+      )
+      const res = await fetch('/api/translate/folder-upload', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (data.error) {
+        alert('提交失败: ' + data.error)
+        setBusy(false)
+        return
+      }
+      setBatchId(data.batch_id)
+    } catch (e: any) {
+      // 用户取消选择器会抛 AbortError
+      if (e?.name !== 'AbortError') {
+        alert('选择失败: ' + (e as Error).message)
+      }
+      setBusy(false)
+    }
+  }, [targetLang, direction, fontSizeOffset, fontId])
 
   // ---- 取消批次 ----
   const cancelBatchReq = useCallback(async () => {
@@ -301,7 +371,22 @@ export default function App() {
           {/* 文件夹模式的路径输入 */}
           {mode === 'folder' && (
             <div className="folder-input">
-              <label className="folder-label">输入文件夹路径</label>
+              <label className="folder-label">方式一：弹出对话框选择（Chrome/Edge）</label>
+              <button
+                className="btn-primary"
+                onClick={pickDirectory}
+                disabled={busy}
+                style={{ width: '100%' }}
+              >
+                📂 选择文件夹…
+              </button>
+              <div className="hint" style={{ marginTop: 6 }}>
+                弹出系统对话框选目录，自动递归读取所有图片。
+              </div>
+
+              <label className="folder-label" style={{ marginTop: 12 }}>
+                方式二：手动输入路径（后端直读，最快）
+              </label>
               <input
                 type="text"
                 value={folderPath}
@@ -310,8 +395,7 @@ export default function App() {
                 disabled={busy}
               />
               <div className="hint">
-                递归扫描所有图片，输出到 outputs/&lt;目录名&gt;_时间戳/，
-                完整保留目录结构和原文件名，可直接移回原文件夹覆盖。
+                输出镜像目录结构、保留原文件名，可直接移回原文件夹覆盖。
               </div>
             </div>
           )}

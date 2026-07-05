@@ -194,6 +194,46 @@ async def translate_folder(payload: dict):
     }
 
 
+@app.post("/api/translate/folder-upload")
+async def translate_folder_upload(
+    files: list[UploadFile] = File(...),
+    rel_paths: str = Form('[]'),
+    dirname: str = Form('upload'),
+    config: str = Form('{}'),
+):
+    """
+    文件夹上传模式（showDirectoryPicker）：浏览器选目录后上传文件们。
+    multipart:
+      files: 多个文件（顺序与 rel_paths 对应）
+      rel_paths: JSON 数组，每个元素是对应文件的相对路径（如 "第2话/001.jpg"）
+      dirname: 用户选择的目录名（用于生成 out_root）
+      config: JSON 字符串
+    """
+    try:
+        rel_list = json.loads(rel_paths) if rel_paths else []
+    except json.JSONDecodeError:
+        rel_list = []
+    try:
+        cfg = json.loads(config) if config else {}
+    except json.JSONDecodeError:
+        cfg = {}
+
+    if len(rel_list) != len(files):
+        return {'error': f'rel_paths 数量({len(rel_list)})与文件数({len(files)})不匹配'}
+
+    files_data = []
+    for f, rel in zip(files, rel_list):
+        raw = await f.read()
+        files_data.append((f.filename or 'image', rel, raw))
+
+    try:
+        batch_id, out_root, total = batch_mod.enqueue_folder_upload(files_data, dirname, cfg)
+    except Exception as e:
+        return {'error': f'{type(e).__name__}: {e}'}
+
+    return {'batch_id': batch_id, 'out_root': out_root, 'total': total}
+
+
 @app.post("/api/batch/{batch_id}/cancel")
 async def cancel_batch(batch_id: str):
     """取消批次：未处理的项目会被跳过，正在跑的会跑完。"""
