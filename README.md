@@ -53,9 +53,10 @@ venv\Scripts\python.exe -m pip install omegaconf tensorboardX einops kornia Imag
 REM 2. 前端依赖
 cd front && npm install && cd ..
 
-REM 3. 字体（因版权不入库，需自行放入 fonts/）
-REM    从 C:\Windows\Fonts\ 复制 msyh.ttc（中文）、msgothic.ttc（日文）
-REM    或从上游 manga-image-translator/fonts/ 复制全部
+REM 3. 字体（可选）
+REM    仓库已含开源 NotoSansMonoCJK（CJK 全覆盖）作为兜底字体，开箱即用。
+REM    run.bat 会自动从 C:\Windows\Fonts 复制 msyh.ttc / msgothic.ttc（如存在）
+REM    获得更好的中文/日文显示效果（这些字体因版权不入库）。
 
 REM 4. 配置 .env（填入你的 DeepSeek key）
 copy .env.example .env

@@ -207,10 +207,19 @@ def add_color(bw_char_map, color, stroke_char_map, stroke_color):
     #alpha_char_map[alpha_char_map > 0] = 255
     return bg#, alpha_char_map
 
+# Fallback fonts (tried in order when the primary font lacks a glyph).
+# Only paths that exist on disk are kept — this lets the project run even when
+# optional commercial fonts (Arial Unicode / msyh / msgothic) are absent.
+# NotoSansMonoCJK-VF.ttf.ttc ships with the repo and serves as the universal
+# last-resort (broad CJK coverage, open license).
 FALLBACK_FONTS = [
-    os.path.join(BASE_PATH, 'fonts/Arial-Unicode-Regular.ttf'),
-    os.path.join(BASE_PATH, 'fonts/msyh.ttc'),
-    os.path.join(BASE_PATH, 'fonts/msgothic.ttc'),
+    p for p in [
+        os.path.join(BASE_PATH, 'fonts/Arial-Unicode-Regular.ttf'),
+        os.path.join(BASE_PATH, 'fonts/msyh.ttc'),
+        os.path.join(BASE_PATH, 'fonts/msgothic.ttc'),
+        os.path.join(BASE_PATH, 'fonts/NotoSansMonoCJK-VF.ttf.ttc'),
+    ]
+    if os.path.isfile(p)
 ]
 FONT_SELECTION: List[freetype.Face] = []
 font_cache = {}
