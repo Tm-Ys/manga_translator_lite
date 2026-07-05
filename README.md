@@ -2,24 +2,31 @@
 
 基于大模型（DeepSeek）的漫画自动翻译。日漫竖排日文 → 中文，自动擦字 + 嵌字回填。
 
-复用 [manga-image-translator](../manga-image-translator) 的核心神经网络模块（检测 / OCR / inpainting / rendering），用全新的单进程 FastAPI 后端 + 轻量 React 前端重写编排层。
+> **许可证**：GPL-3.0（见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)）。
+> 本项目核心神经网络模块（`manga_translator/`）来源于上游
+> [manga-image-translator](https://github.com/zyddnys/manga-image-translator)，
+> 其余代码为本项目编写，整体以 GPL-3.0 发布。
 
 ## 架构
 
 ```
 manga-translator-lite/
 ├── app/                # 后端（单进程 FastAPI）
-│   ├── main.py         # 3 个端点：批量翻译 / 状态轮询 / 停止
-│   ├── pipeline.py     # 翻译管线（委托给 fork 的 MangaTranslator）
+│   ├── main.py         # 端点：批量翻译 / 状态轮询 / 列出结果 / 打开目录 / 停止
+│   ├── pipeline.py     # 翻译管线（单例 MangaTranslator，单进程）
 │   └── batch.py        # 任务队列 + 进度状态（内存 dict）
 ├── front/              # 前端（React 19 + Vite + TS）
 │   └── src/App.tsx     # 多文件上传 + 队列 + 轮询 + 结果对比
-├── .env                # DeepSeek API key
+├── manga_translator/   # 核心模块（来自上游 GPL-3.0）
+├── fonts/              # 嵌字字体（用户自行放入）
+├── models/             # 模型权重（运行时自动下载，不入库）
+├── dict/               # 翻译词典
+├── .env                # DeepSeek API key（不入库）
 ├── requirements.txt
 └── run.bat             # 一键启动
 ```
 
-**关键设计**：通过 `sys.path` 引用隔壁 `../manga-image-translator/manga_translator` 的模块，复用其检测/OCR/inpainting/rendering 实现，不复制代码。fork 当"模型库"。
+**独立运行**：`manga_translator/` 已搬入项目根目录，不依赖外部 fork。
 
 ## 管线
 
@@ -40,12 +47,22 @@ py -3.12 -m venv venv
 venv\Scripts\python.exe -m pip install --upgrade pip
 venv\Scripts\python.exe -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
 venv\Scripts\python.exe -m pip install -r requirements.txt
-REM 还需这些 fork 间接依赖
+REM 还需这些间接依赖（manga_translator 包内部引用）
 venv\Scripts\python.exe -m pip install omegaconf tensorboardX einops kornia ImageHash timm safetensors manga-ocr pandas onnxruntime deepl groq google-genai cryptography ctranslate2 sentencepiece tiktoken rusty-manga-image-translator --extra-index-url https://frederik-uni.github.io/manga-image-translator-rust/python/wheels/simple/
 
 REM 2. 前端依赖
 cd front && npm install && cd ..
+
+REM 3. 字体（因版权不入库，需自行放入 fonts/）
+REM    从 C:\Windows\Fonts\ 复制 msyh.ttc（中文）、msgothic.ttc（日文）
+REM    或从上游 manga-image-translator/fonts/ 复制全部
+
+REM 4. 配置 .env（填入你的 DeepSeek key）
+copy .env.example .env
+notepad .env
 ```
+
+首次翻译时会自动下载模型权重（约 685MB）到 `models/`。
 
 ## 启动
 

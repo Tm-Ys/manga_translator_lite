@@ -21,8 +21,22 @@ manga/
 outputs/
 test_input.png
 test_output.png
+test_indep.png
 _real_result.png
 _s*.json
+_probe.py
+
+# ===== 模型权重（运行时下载，不入库）=====
+# GPL 合规：源码完整即可，权重非源码且由程序自动获取
+models/
+
+# ===== 字体版权风险（部分字体为商用授权，不入库）=====
+# msyh.ttc / msgothic.ttc 是微软字体，推到公开仓库有版权风险
+# Arial-Unicode-Regular.ttf 同理
+# 字体首次运行时由用户自行放入 fonts/，或从上游 fork 复制
+fonts/msyh.ttc
+fonts/msgothic.ttc
+fonts/Arial-Unicode-Regular.ttf
 
 # ===== 前端 =====
 front/node_modules/
@@ -34,3 +48,6 @@ front/.vite/
 .idea/
 .DS_Store
 Thumbs.db
+result/
+
+# 上游运行时残留日志

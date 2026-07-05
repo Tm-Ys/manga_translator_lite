@@ -1,0 +1,21 @@
+NOTICE - Manga Translator Lite
+================================
+
+本项目基于以下开源项目：
+
+  manga-image-translator
+    upstream: https://github.com/zyddnys/manga-image-translator
+    license:  GPL-3.0
+
+本项目目录下的 `manga_translator/`（漫画文字检测、OCR、图像修复、
+文字渲染等核心神经网络模块）直接来源于 manga-image-translator 项目，
+按其原始许可证（GPL-3.0）以 verbatim 形式分发。这些文件的著作权
+归属于上游作者，详见上游仓库。
+
+本项目其余代码（app/、front/、test_pipeline.py 等编排与界面层）
+为 Manga Translator Lite 自身编写，同样以 GPL-3.0 发布。
+
+模型权重
+---------
+`models/` 目录下的神经网络权重文件（detection/ocr/inpainting）
+不在本仓库中分发，运行时由程序自动从上游来源下载。

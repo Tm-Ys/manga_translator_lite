@@ -1,17 +1,17 @@
 """
 pipeline.py — 翻译管线编排。
 
-复用隔壁 fork (manga-image-translator) 的 MangaTranslator 基类，
-单进程 in-process 调用，不走 executor/nonce 双进程协议。
+复用 manga_translator 包（已搬进本项目根目录），单进程 in-process 调用，
+不走 executor/nonce 双进程协议。
 """
 import os
 import sys
 from pathlib import Path
 
-# ---- 把 fork 的根加入 sys.path，复用其 manga_translator 包 ----
-FORK_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'manga-image-translator'))
-if FORK_ROOT not in sys.path:
-    sys.path.insert(0, FORK_ROOT)
+# ---- 项目根加入 sys.path（让 `from manga_translator import ...` 能找到本地包）----
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 from dotenv import load_dotenv
 load_dotenv()  # 加载 .env（DEEPSEEK_API_KEY 等）
@@ -33,7 +33,7 @@ def get_translator() -> MangaTranslator:
             'ignore_errors': False,
             'verbose': False,
             'kernel_size': 3,
-            'model_dir': os.path.join(FORK_ROOT, 'models'),
+            'model_dir': os.path.join(PROJECT_ROOT, 'models'),
         })
     return _translator
 
