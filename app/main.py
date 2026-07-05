@@ -131,6 +131,7 @@ class BatchStatusResponse(BaseModel):
     id: str
     summary: dict
     items: list[dict]
+    out_root: Optional[str] = None
 
 
 # ---------- 端点 ----------
@@ -168,17 +169,52 @@ async def translate_batch(
     }
 
 
+@app.post("/api/translate/folder")
+async def translate_folder(payload: dict):
+    """
+    文件夹模式：扫描本地目录，递归翻译所有图片，输出镜像目录树。
+    payload: { input_root: str, config?: dict }
+    """
+    input_root = payload.get('input_root', '').strip()
+    if not input_root:
+        return {'error': '请提供 input_root 路径'}
+    if not os.path.isdir(input_root):
+        return {'error': f'路径不存在或不是目录: {input_root}'}
+
+    cfg = payload.get('config', {}) or {}
+    try:
+        batch_id, out_root, total = batch_mod.enqueue_folder(input_root, cfg)
+    except Exception as e:
+        return {'error': f'{type(e).__name__}: {e}'}
+
+    return {
+        'batch_id': batch_id,
+        'out_root': out_root,
+        'total': total,
+    }
+
+
+@app.post("/api/batch/{batch_id}/cancel")
+async def cancel_batch(batch_id: str):
+    """取消批次：未处理的项目会被跳过，正在跑的会跑完。"""
+    ok = batch_mod.cancel_batch(batch_id)
+    return {'ok': ok}
+
+
 @app.get("/api/batch/{batch_id}/status", response_model=BatchStatusResponse)
 async def batch_status(batch_id: str):
     b = batch_mod.BATCHES.get(batch_id)
     if not b:
-        return BatchStatusResponse(id=batch_id, summary={'total': 0, 'done': 0, 'error': 0, 'running': False, 'finished': True}, items=[])
+        return BatchStatusResponse(id=batch_id, summary={'total': 0, 'done': 0, 'error': 0, 'running': False, 'finished': True, 'cancelled': False}, items=[])
+
+    cfg = getattr(b, 'cfg', {}) or {}
+    out_root = cfg.get('out_root') if cfg.get('mode') == 'folder' else None
 
     items_out = []
     for it in b.items:
         item_dict = {
             'id': it.id,
-            'filename': it.filename,
+            'filename': it.rel_path or it.filename,  # 文件夹模式显示相对路径
             'status': it.status,
             'progress': it.progress,
             'error': it.error,
@@ -194,6 +230,7 @@ async def batch_status(batch_id: str):
         id=batch_id,
         summary=b.summary(),
         items=items_out,
+        out_root=out_root,
     )
 
 

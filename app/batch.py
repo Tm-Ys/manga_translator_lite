@@ -28,9 +28,9 @@ class BatchItem:
     id: str
     filename: str
     status: Literal['queued', 'running', 'done', 'error'] = 'queued'
-    progress: str = ''          # 来自 MIT 的 state 字符串（如 "detection", "ocr" 等）
-    result_filename: Optional[str] = None  # 存到 outputs/ 的文件名（含批次子目录），前端用 /result/{path} 拉
-    result_url: Optional[str] = None       # 静态文件 URL，如 /result/abc123/原文件名.png
+    progress: str = ''          # MIT state string ("detection", "ocr", ...)
+    result_filename: Optional[str] = None   # "<batch_id>/<safe>.png"
+    result_url: Optional[str] = None        # "/result/<batch_id>/<safe>.png"
     error: Optional[str] = None
     started_at: Optional[float] = None
     finished_at: Optional[float] = None
@@ -39,6 +39,8 @@ class BatchItem:
     source_thumb_b64: str = ''  # 原图缩略图 base64（给前端立即展示）
     # 结果图 base64（done 时填，前端直接展示，无需二次拉取）
     result_b64: str = ''
+    # 文件夹模式专用：相对输入根的路径（如 "第2话/001.jpg"），网页模式为 None
+    rel_path: Optional[str] = None
 
 
 @dataclass
@@ -46,6 +48,7 @@ class Batch:
     id: str
     items: list[BatchItem] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
+    cancelled: bool = False  # 取消标志：worker 每张开始前检查
 
     def summary(self) -> dict:
         """汇总进度：done/total"""
@@ -53,8 +56,12 @@ class Batch:
         done = sum(1 for i in self.items if i.status == 'done')
         error = sum(1 for i in self.items if i.status == 'error')
         running = any(i.status == 'running' for i in self.items)
+        # 取消后，未处理的 queued 项也算"结束"（避免前端永远轮询）
+        cancelled_count = sum(1 for i in self.items if i.status == 'queued' and self.cancelled)
+        finished = (done + error + cancelled_count) == total
         return {'total': total, 'done': done, 'error': error,
-                'running': running, 'finished': (done + error) == total}
+                'running': running, 'finished': finished,
+                'cancelled': self.cancelled}
 
 
 # ---- 全局状态 ----
@@ -115,6 +122,16 @@ async def _worker():
         if not item:
             continue
 
+        # 取消检查：批次被取消后，未处理的 queued 项直接标记为已取消
+        if batch.cancelled:
+            if item.status == 'queued':
+                item.status = 'error'
+                item.error = '已取消'
+                item.progress = 'cancelled'
+                item.finished_at = time.time()
+            _queue.task_done()
+            continue
+
         item.status = 'running'
         item.progress = 'loading'
         item.started_at = time.time()
@@ -140,14 +157,45 @@ async def _worker():
             )
 
             item.result_b64 = _pil_to_b64_full(result)
-            # 落盘：outputs/<batch_id>/<安全文件名>.png
-            batch_dir = os.path.join(OUTPUTS_DIR, batch_id)
-            os.makedirs(batch_dir, exist_ok=True)
-            safe_name = _safe_filename(item.filename)
-            out_path = os.path.join(batch_dir, safe_name)
-            result.save(out_path, format='PNG')
-            item.result_filename = f'{batch_id}/{safe_name}'
-            item.result_url = f'/result/{batch_id}/{safe_name}'
+
+            # 落盘路径：文件夹模式 vs 网页模式
+            mode = cfg.get('mode', 'upload')
+            if mode == 'folder':
+                # 文件夹模式：镜像目录树，保留原文件名 + 原扩展名
+                out_root = cfg.get('out_root', batch_id)
+                rel = item.rel_path or item.filename
+                # 安全校验：rel_path 不得逃出 out_root
+                out_root_abs = os.path.join(OUTPUTS_DIR, out_root)
+                out_path = os.path.normpath(os.path.join(out_root_abs, rel))
+                if not out_path.startswith(os.path.normpath(out_root_abs) + os.sep) \
+                   and out_path != os.path.normpath(out_root_abs):
+                    raise RuntimeError(f'路径越界: {rel}')
+                os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                # 保留原扩展名（jpg 仍是 jpg），但 PIL 按扩展名选格式
+                # JPEG 不支持透明通道，RGBA/PA 要先转 RGB（白底）
+                out_img = result
+                ext_lower = os.path.splitext(out_path)[1].lower()
+                if ext_lower in ('.jpg', '.jpeg') and out_img.mode in ('RGBA', 'PA', 'P'):
+                    from PIL import Image as _PILImage
+                    bg = _PILImage.new('RGB', out_img.size, (255, 255, 255))
+                    if out_img.mode == 'P':
+                        out_img = out_img.convert('RGBA')
+                    bg.paste(out_img, mask=out_img.split()[-1] if out_img.mode == 'RGBA' else None)
+                    out_img = bg
+                out_img.save(out_path)
+                url_rel = rel.replace('\\', '/').lstrip('/')
+                item.result_filename = f'{out_root}/{url_rel}'
+                item.result_url = f'/result/{out_root}/{url_rel}'
+            else:
+                # 网页上传模式：flat 到 <batch_id>/<安全名>.png
+                batch_dir = os.path.join(OUTPUTS_DIR, batch_id)
+                os.makedirs(batch_dir, exist_ok=True)
+                safe_name = _safe_filename(item.filename)
+                out_path = os.path.join(batch_dir, safe_name)
+                result.save(out_path, format='PNG')
+                item.result_filename = f'{batch_id}/{safe_name}'
+                item.result_url = f'/result/{batch_id}/{safe_name}'
+
             item.status = 'done'
             item.progress = 'finished'
             item.finished_at = time.time()
@@ -192,3 +240,77 @@ def enqueue_batch(images: list[tuple[str, bytes]]) -> str:
     for item in batch.items:
         _queue.put_nowait((batch_id, item.id))
     return batch_id
+
+
+# 支持的图片扩展名（小写）
+IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.webp', '.bmp'}
+
+
+def enqueue_folder(input_root: str, cfg: dict) -> tuple[str, str, int]:
+    """
+    文件夹模式：扫描 input_root 下所有图片（递归），入队翻译。
+    输出会镜像目录树到 outputs/<输入目录名>_<时间戳>/，文件名保留。
+
+    返回 (batch_id, out_root, total)。
+    cfg 会被原地补上 mode='folder' 和 out_root。
+    """
+    input_root = os.path.abspath(input_root)
+    if not os.path.isdir(input_root):
+        raise NotADirectoryError(f'不是目录: {input_root}')
+
+    # 输出根目录名：<输入目录名>_yyyy_mm_dd_HH_MM_SS
+    dirname = os.path.basename(input_root.rstrip('\\/')) or 'output'
+    ts = time.strftime('%Y_%m_%d_%H_%M_%S')
+    out_root = f'{dirname}_{ts}'
+
+    cfg = dict(cfg)
+    cfg['mode'] = 'folder'
+    cfg['out_root'] = out_root
+    cfg['input_root'] = input_root
+
+    batch_id = uuid.uuid4().hex[:12]
+    batch = Batch(id=batch_id)
+
+    # 递归扫描图片
+    for root, _dirs, files in os.walk(input_root):
+        for fn in sorted(files):
+            ext = os.path.splitext(fn)[1].lower()
+            if ext not in IMAGE_EXTENSIONS:
+                continue
+            full = os.path.join(root, fn)
+            rel = os.path.relpath(full, input_root)  # 如 "第2话\\001.jpg"
+            try:
+                with open(full, 'rb') as fp:
+                    raw = fp.read()
+            except Exception as e:
+                print(f'[folder] 跳过无法读取的文件 {full}: {e}')
+                continue
+            b64 = 'data:image/png;base64,' + base64.b64encode(raw).decode()
+            item = BatchItem(
+                id=uuid.uuid4().hex[:8],
+                filename=fn,
+                rel_path=rel,
+                source_b64=b64,
+            )
+            # 缩略图：试生成，失败就空着（前端用占位）
+            try:
+                img = Image.open(io.BytesIO(raw))
+                item.source_thumb_b64 = _img_to_b64(img)
+            except Exception:
+                pass
+            batch.items.append(item)
+
+    BATCHES[batch_id] = batch
+    setattr(batch, 'cfg', cfg)
+    for item in batch.items:
+        _queue.put_nowait((batch_id, item.id))
+    return batch_id, out_root, len(batch.items)
+
+
+def cancel_batch(batch_id: str) -> bool:
+    """标记批次为取消。worker 会在下一张开始前检查并跳过。"""
+    b = BATCHES.get(batch_id)
+    if not b:
+        return False
+    b.cancelled = True
+    return True

@@ -25,6 +25,7 @@ test_indep.png
 _real_result.png
 _s*.json
 _probe.py
+_test_tree/
 
 # ===== 模型权重（运行时下载，不入库）=====
 # GPL 合规：源码完整即可，权重非源码且由程序自动获取

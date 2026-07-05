@@ -38,6 +38,80 @@ body {
   overflow-y: auto;
 }
 
+/* ---- 模式切换 tab ---- */
+.mode-tabs {
+  display: flex;
+  gap: 4px;
+  background: #0f1115;
+  padding: 4px;
+  border-radius: 8px;
+}
+.mode-tabs button {
+  flex: 1;
+  background: transparent;
+  color: #888;
+  border: none;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.mode-tabs button.active {
+  background: #2563eb;
+  color: white;
+}
+.mode-tabs button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---- 文件夹输入 ---- */
+.folder-input {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.folder-label {
+  font-size: 13px;
+  color: #aaa;
+}
+.folder-input input[type='text'] {
+  background: #0f1115;
+  border: 1px solid #2a3142;
+  color: #e6e6e6;
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: ui-monospace, monospace;
+}
+.folder-input input[type='text']:focus {
+  outline: none;
+  border-color: #4a8fff;
+}
+.folder-outroot {
+  font-size: 12px;
+  color: #4ade80;
+  background: #0f1115;
+  padding: 8px 10px;
+  border-radius: 6px;
+  word-break: break-all;
+}
+
+/* ---- 取消按钮（小） ---- */
+.btn-cancel-small {
+  background: #3a1d1d;
+  color: #ff8080;
+  border: 1px solid #5a2828;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  margin-top: 6px;
+}
+.btn-cancel-small:hover {
+  background: #4a2424;
+}
+
 /* ---- 上传区 ---- */
 .dropzone {
   border: 2px dashed #2f3850; border-radius: 10px;
