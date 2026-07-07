@@ -67,15 +67,93 @@ class Batch:
 # ---- 全局状态 ----
 BATCHES: dict[str, Batch] = {}
 RESULTS_DIR: str = ''  # main.py 启动时设置
+STATE_FILE = os.path.join(OUTPUTS_DIR, '.batches.json')
 
 # 任务队列 + 单 worker
 _queue: asyncio.Queue = None  # main.py 启动时创建
 _worker_started = False
 
 
+def _serialize_batch(b: 'Batch') -> dict:
+    """把 batch 序列化成可 JSON 化的 dict（不含 base64 大字段）。"""
+    cfg = getattr(b, 'cfg', {}) or {}
+    return {
+        'id': b.id,
+        'created_at': b.created_at,
+        'cancelled': b.cancelled,
+        'cfg': {k: v for k, v in cfg.items() if k != 'input_root'},  # 不存本地路径
+        'items': [
+            {
+                'id': it.id,
+                'filename': it.filename,
+                'rel_path': it.rel_path,
+                'status': it.status,
+                'progress': it.progress,
+                'error': it.error,
+                'result_url': it.result_url,
+                'started_at': it.started_at,
+                'finished_at': it.finished_at,
+            }
+            for it in b.items
+        ],
+    }
+
+
+def _save_state():
+    """把所有批次元数据写到 .batches.json（失败不阻塞主流程）。"""
+    import json as _json
+    try:
+        data = {'batches': [_serialize_batch(b) for b in BATCHES.values()]}
+        tmp = STATE_FILE + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            _json.dump(data, f, ensure_ascii=False)
+        os.replace(tmp, STATE_FILE)
+    except Exception as e:
+        print(f'[state] 保存失败（不影响运行）: {e}')
+
+
+def _load_state():
+    """启动时从 .batches.json 恢复历史批次元数据。"""
+    import json as _json
+    if not os.path.isfile(STATE_FILE):
+        return
+    try:
+        with open(STATE_FILE, 'r', encoding='utf-8') as f:
+            data = _json.load(f)
+        loaded = 0
+        for bd in data.get('batches', []):
+            # 已经在内存的不覆盖
+            if bd['id'] in BATCHES:
+                continue
+            batch = Batch(id=bd['id'], created_at=bd.get('created_at', time.time()),
+                         cancelled=bd.get('cancelled', False))
+            setattr(batch, 'cfg', bd.get('cfg', {}))
+            for itd in bd.get('items', []):
+                it = BatchItem(
+                    id=itd['id'], filename=itd['filename'],
+                    rel_path=itd.get('rel_path'),
+                    status=itd.get('status', 'done'),
+                    progress=itd.get('progress', 'finished'),
+                    error=itd.get('error'),
+                    result_url=itd.get('result_url'),
+                    started_at=itd.get('started_at'),
+                    finished_at=itd.get('finished_at'),
+                )
+                # 已完成的 item 标记 result_url（前端能重新加载结果图）
+                # 不恢复 source_b64/result_b64（太大），前端用 result_url
+                batch.items.append(it)
+            BATCHES[batch.id] = batch
+            loaded += 1
+        if loaded:
+            print(f'[state] 从磁盘恢复 {loaded} 个历史批次')
+    except Exception as e:
+        print(f'[state] 加载失败（忽略，从空开始）: {e}')
+
+
 def init_queue(loop=None):
     """在 asyncio loop 里初始化队列并启动 worker。"""
     global _queue, _worker_started
+    _load_state()  # 启动时恢复历史批次
     if _queue is None:
         _queue = asyncio.Queue()
     if not _worker_started:
@@ -129,6 +207,7 @@ async def _worker():
                 item.error = '已取消'
                 item.progress = 'cancelled'
                 item.finished_at = time.time()
+                _save_state()
             _queue.task_done()
             continue
 
@@ -208,6 +287,7 @@ async def _worker():
             item.finished_at = time.time()
             print(f'[worker] error: {item.filename}: {e}')
         finally:
+            _save_state()
             _queue.task_done()
 
 
@@ -239,6 +319,7 @@ def enqueue_batch(images: list[tuple[str, bytes]]) -> str:
     # 入队（注意：worker 在另一个 task 里 await，这里只 put）
     for item in batch.items:
         _queue.put_nowait((batch_id, item.id))
+    _save_state()
     return batch_id
 
 
@@ -304,6 +385,7 @@ def enqueue_folder(input_root: str, cfg: dict) -> tuple[str, str, int]:
     setattr(batch, 'cfg', cfg)
     for item in batch.items:
         _queue.put_nowait((batch_id, item.id))
+    _save_state()
     return batch_id, out_root, len(batch.items)
 
 
@@ -313,6 +395,7 @@ def cancel_batch(batch_id: str) -> bool:
     if not b:
         return False
     b.cancelled = True
+    _save_state()
     return True
 
 
@@ -362,4 +445,5 @@ def enqueue_folder_upload(
     setattr(batch, 'cfg', cfg)
     for item in batch.items:
         _queue.put_nowait((batch_id, item.id))
+    _save_state()
     return batch_id, out_root, len(batch.items)

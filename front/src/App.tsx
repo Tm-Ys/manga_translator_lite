@@ -59,6 +59,9 @@ export default function App() {
   // 模式：上传 vs 文件夹
   const [mode, setMode] = useState<'upload' | 'folder'>('upload')
   const [folderPath, setFolderPath] = useState('')
+  // 是否在展示"恢复的历史批次"（刷新/重启后从 localStorage+后端恢复）
+  // 这种状态下队列直接渲染 status.items，不依赖本地 files
+  const [restored, setRestored] = useState(false)
 
   // ---- 加载字体列表 ----
   const loadFonts = useCallback(async () => {
@@ -74,6 +77,16 @@ export default function App() {
   useEffect(() => {
     loadFonts()
   }, [loadFonts])
+
+  // ---- 启动时从 localStorage 恢复上次批次 ----
+  useEffect(() => {
+    const saved = localStorage.getItem('mtl_batch_id')
+    if (saved) {
+      setBatchId(saved)
+      setRestored(true)
+      setBusy(true)
+    }
+  }, [])
 
   // ---- 上传字体 ----
   const onUploadFont = useCallback(
@@ -105,6 +118,8 @@ export default function App() {
     // 选择新文件时清掉上一次结果
     setBatchId(null)
     setStatus(null)
+    setRestored(false)
+    localStorage.removeItem('mtl_batch_id')
   }, [])
 
   const onDrop = useCallback(
@@ -135,6 +150,8 @@ export default function App() {
       const res = await fetch('/api/translate/batch', { method: 'POST', body: fd })
       const data = await res.json()
       setBatchId(data.batch_id)
+      localStorage.setItem('mtl_batch_id', data.batch_id)
+      setRestored(false)
     } catch (e) {
       alert('提交失败: ' + (e as Error).message)
       setBusy(false)
@@ -164,6 +181,8 @@ export default function App() {
         return
       }
       setBatchId(data.batch_id)
+      localStorage.setItem('mtl_batch_id', data.batch_id)
+      setRestored(false)
     } catch (e) {
       alert('提交失败: ' + (e as Error).message)
       setBusy(false)
@@ -231,6 +250,8 @@ export default function App() {
         return
       }
       setBatchId(data.batch_id)
+      localStorage.setItem('mtl_batch_id', data.batch_id)
+      setRestored(false)
     } catch (e: any) {
       // 用户取消选择器会抛 AbortError
       if (e?.name !== 'AbortError') {
@@ -305,6 +326,8 @@ export default function App() {
     setFiles([])
     setBatchId(null)
     setStatus(null)
+    setRestored(false)
+    localStorage.removeItem('mtl_batch_id')
   }
 
   // 把后端 items 跟本地 files 对齐（按顺序；后端按上传顺序处理）
@@ -515,8 +538,8 @@ export default function App() {
             </div>
           )}
 
-          {/* 上传模式：本地文件渲染 */}
-          {mode === 'upload' &&
+          {/* 上传模式（非恢复状态）：本地文件渲染 */}
+          {mode === 'upload' && !restored &&
             files.map((f, idx) => {
               const it = items[idx]
               return (
@@ -536,8 +559,8 @@ export default function App() {
               )
             })}
 
-          {/* 文件夹模式：直接渲染后端 items */}
-          {mode === 'folder' &&
+          {/* 文件夹模式 或 恢复状态：直接渲染后端 items */}
+          {(mode === 'folder' || restored) &&
             items.map((it, idx) => (
               <FileRow
                 key={it.id || idx}
